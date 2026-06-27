@@ -139,5 +139,5 @@ def _row_to_entry(row: sqlite3.Row) -> HistoryEntry:
         raw_text=row["raw_text"],
         structured_text=row["structured_text"],
         duration_sec=row["duration_sec"],
-        status=row["status"] if "status" in row.keys() else "complete",
+        status=row["status"],
     )

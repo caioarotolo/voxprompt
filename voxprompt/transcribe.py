@@ -1,7 +1,6 @@
 import json
 from dataclasses import dataclass
 from typing import Any
-from urllib.error import URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -127,7 +126,7 @@ def _fetch_local_json(config: Config, path: str) -> LocalEndpointResult:
         request = Request(url, headers={"Accept": "application/json"})
         with urlopen(request, timeout=LOCAL_STATUS_TIMEOUT_SEC) as response:
             payload = response.read().decode("utf-8")
-    except (OSError, URLError, TimeoutError) as exc:
+    except (OSError, TimeoutError) as exc:
         return LocalEndpointResult(error=str(exc))
 
     try:
