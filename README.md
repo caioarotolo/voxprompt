@@ -68,6 +68,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `LOCAL_STT_URL` | `http://localhost:8000/v1` | base URL do servidor local OpenAI-compatible |
 | `LOCAL_STT_MODEL` | `parakeet-tdt-0.6b-v3` | modelo STT local |
 | `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`raw`) |
+| `VOXPROMPT_DB` | `./voxprompt.db` | caminho do SQLite com o histórico de transcrições |
 | `CLAUDE_BIN` | `claude` | binário do Claude Code |
 | `CLAUDE_MODEL` | `sonnet` | modelo do `claude -p` na estruturação (`sonnet`/`opus`/`haiku`). Vazio = herda o default do CLI |
 | `OPENAI_API_KEY` | — | **exigido só no backend `openai`** |
@@ -90,7 +91,9 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `h` | mostra/oculta o histórico |
 | `q` | sai |
 
-Selecionar uma linha do histórico recarrega os dois painéis.
+Selecionar uma linha do histórico recarrega os dois painéis. O histórico é gravado
+em SQLite local (`voxprompt.db`) e, ao abrir, a TUI recarrega as últimas 100
+transcrições de sessões anteriores.
 
 ## Templates
 

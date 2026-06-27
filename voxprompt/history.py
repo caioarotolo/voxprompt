@@ -1,5 +1,7 @@
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 
 @dataclass
@@ -13,12 +15,32 @@ class HistoryEntry:
     duration_sec: float
 
 
-class SessionHistory:
-    """Histórico em memória da sessão (sem persistência em disco)."""
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS transcriptions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp       TEXT    NOT NULL,
+    stt_backend     TEXT    NOT NULL,
+    template        TEXT    NOT NULL,
+    raw_text        TEXT    NOT NULL,
+    structured_text TEXT    NOT NULL,
+    duration_sec    REAL    NOT NULL
+);
+"""
 
-    def __init__(self) -> None:
-        self._entries: list[HistoryEntry] = []
-        self._next_id = 1
+
+class HistoryStore:
+    """Histórico de transcrições persistido em SQLite local.
+
+    Todo acesso vem da thread principal do Textual (os inserts chegam via
+    `call_from_thread`), então uma única conexão serializada basta.
+    """
+
+    def __init__(self, db_path: str) -> None:
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(db_path)
+        self._conn.row_factory = sqlite3.Row
+        with self._conn:
+            self._conn.execute(_SCHEMA)
 
     def add(
         self,
@@ -28,27 +50,61 @@ class SessionHistory:
         structured_text: str,
         duration_sec: float,
     ) -> HistoryEntry:
-        entry = HistoryEntry(
-            id=self._next_id,
-            timestamp=datetime.now(),
+        timestamp = datetime.now()
+        with self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO transcriptions "
+                "(timestamp, stt_backend, template, raw_text, structured_text, duration_sec) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    timestamp.isoformat(),
+                    stt_backend,
+                    template,
+                    raw_text,
+                    structured_text,
+                    duration_sec,
+                ),
+            )
+        return HistoryEntry(
+            id=cur.lastrowid,
+            timestamp=timestamp,
             stt_backend=stt_backend,
             template=template,
             raw_text=raw_text,
             structured_text=structured_text,
             duration_sec=duration_sec,
         )
-        self._entries.append(entry)
-        self._next_id += 1
-        return entry
 
     def get(self, entry_id: int) -> HistoryEntry | None:
-        for entry in self._entries:
-            if entry.id == entry_id:
-                return entry
-        return None
+        row = self._conn.execute(
+            "SELECT * FROM transcriptions WHERE id = ?", (entry_id,)
+        ).fetchone()
+        return _row_to_entry(row) if row else None
 
     def latest(self) -> HistoryEntry | None:
-        return self._entries[-1] if self._entries else None
+        row = self._conn.execute(
+            "SELECT * FROM transcriptions ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return _row_to_entry(row) if row else None
 
-    def all(self) -> list[HistoryEntry]:
-        return list(self._entries)
+    def recent(self, limit: int) -> list[HistoryEntry]:
+        """Últimas `limit` entradas em ordem cronológica (mais antiga primeiro)."""
+        rows = self._conn.execute(
+            "SELECT * FROM transcriptions ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [_row_to_entry(row) for row in reversed(rows)]
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def _row_to_entry(row: sqlite3.Row) -> HistoryEntry:
+    return HistoryEntry(
+        id=row["id"],
+        timestamp=datetime.fromisoformat(row["timestamp"]),
+        stt_backend=row["stt_backend"],
+        template=row["template"],
+        raw_text=row["raw_text"],
+        structured_text=row["structured_text"],
+        duration_sec=row["duration_sec"],
+    )

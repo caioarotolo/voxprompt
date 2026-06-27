@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STT_BACKENDS = ("local", "openai")
 TEMPLATES = ("spec", "commit", "prompt", "financeiro", "marketing", "formal", "whatsapp", "raw")
 
@@ -13,8 +14,7 @@ def _load_dotenv() -> None:
         from dotenv import load_dotenv
     except ImportError:
         return
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_path)
+    load_dotenv(PROJECT_ROOT / ".env")
 
 
 @dataclass
@@ -24,6 +24,7 @@ class Config:
     local_stt_url: str
     local_stt_model: str
     template: str
+    db_path: str
     claude_bin: str
     claude_model: str  # alias passado em `claude --model`; vazio = herda o default do CLI
     openai_api_key: str | None
@@ -47,6 +48,7 @@ def load_config() -> Config:
         local_stt_url=os.getenv("LOCAL_STT_URL", "http://localhost:8000/v1"),
         local_stt_model=os.getenv("LOCAL_STT_MODEL", "parakeet-tdt-0.6b-v3"),
         template=template,
+        db_path=os.getenv("VOXPROMPT_DB", "").strip() or str(PROJECT_ROOT / "voxprompt.db"),
         claude_bin=os.getenv("CLAUDE_BIN", "claude"),
         claude_model=os.getenv("CLAUDE_MODEL", "sonnet").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY") or None,

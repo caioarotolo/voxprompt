@@ -11,12 +11,13 @@ from textual.widgets import DataTable, Footer, Static, TextArea
 
 from voxprompt import audio, clipboard, structure, transcribe
 from voxprompt.config import TEMPLATES, Config, load_config
-from voxprompt.history import HistoryEntry, SessionHistory
+from voxprompt.history import HistoryEntry, HistoryStore
 from voxprompt.widgets import StatusBar, VoxHeader
 
 TEMPLATE_ORDER = TEMPLATES  # ordem do ciclo da tecla `t`; fonte única em config.TEMPLATES
 BUSY_STATES = ("recording", "transcribing", "structuring")
 PREVIEW_CHARS = 60
+HISTORY_LIMIT = 100  # transcrições carregadas do SQLite ao abrir
 
 
 class VoxPromptApp(App):
@@ -40,7 +41,7 @@ class VoxPromptApp(App):
         self.config: Config = load_config()
         self.stt_backend: str = self.config.stt_backend
         self.template: str = self.config.template
-        self.history = SessionHistory()
+        self.history = HistoryStore(self.config.db_path)
         self._stop_event = threading.Event()
         self._record_start = 0.0
         self._timer = None
@@ -71,6 +72,8 @@ class VoxPromptApp(App):
 
         table = self.query_one("#history", DataTable)
         table.add_columns("#", "Hora", "STT", "Template", "Preview", "Chars")
+        for entry in self.history.recent(HISTORY_LIMIT):
+            self._add_history_row(entry)
 
         self._refresh_header()
         self.query_one("#status", StatusBar).set_status("Pronto.", "idle")
@@ -238,11 +241,12 @@ class VoxPromptApp(App):
         self._active_entry = entry
         self._update_panel("raw", raw)
         self._update_panel("structured", structured)
+        self._add_history_row(entry)
 
-        table = self.query_one("#history", DataTable)
-        active = structured or raw
+    def _add_history_row(self, entry: HistoryEntry) -> None:
+        active = entry.structured_text or entry.raw_text
         preview = active.replace("\n", " ")[:PREVIEW_CHARS]
-        table.add_row(
+        self.query_one("#history", DataTable).add_row(
             str(entry.id),
             entry.timestamp.strftime("%H:%M:%S"),
             entry.stt_backend,
@@ -344,6 +348,7 @@ class VoxPromptApp(App):
         self._stop_event.set()
         for path in list(self._temp_files):
             self._safe_remove(path)
+        self.history.close()
 
 
 def main() -> None:
