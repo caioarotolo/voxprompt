@@ -56,6 +56,26 @@ TEMPLATE_INSTRUCTIONS = {
         "português: tom leve e direto, frases curtas e emojis com moderação quando couber. "
         "Mantenha a intenção da fala. Responda apenas com a mensagem, sem preâmbulo."
     ),
+    "reuniao": (
+        "Você recebe via stdin a transcrição bruta de uma reunião em português. Produza a "
+        "saída em Markdown com EXATAMENTE estas duas partes, nesta ordem.\n\n"
+        "## Transcrição limpa\n"
+        "Reproduza TODO o conteúdo da reunião fielmente, sem cortar, resumir nem omitir "
+        "nenhum ponto discutido. Esta parte é transcrição, não síntese — jamais a resuma. "
+        "Remova APENAS: vícios de linguagem ('então', 'tipo', 'né', 'assim', 'é', "
+        "hesitações), repetições excessivas da mesma frase e ruídos de fala sem conteúdo. "
+        "Mantenha a voz de cada participante, a ordem cronológica e todos os detalhes ditos.\n\n"
+        "## Consolidado da reunião\n"
+        "Baseie-se apenas no que foi dito na reunião, sem inferências. Use estas subseções:\n"
+        "### Decisões tomadas\n"
+        "Liste o que foi definido ou aprovado durante a reunião.\n"
+        "### Próximos passos\n"
+        "Liste as ações identificadas, com responsável e prazo quando mencionados.\n"
+        "### Pontos em aberto\n"
+        "Liste dúvidas ou temas que ficaram sem resolução; omita a lista se não houver.\n\n"
+        "Nenhum conteúdo da Transcrição limpa pode ser apagado para 'caber' no Consolidado. "
+        "Responda apenas com as duas partes, sem preâmbulo."
+    ),
 }
 
 

@@ -67,7 +67,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | modelo STT no backend `openai` |
 | `LOCAL_STT_URL` | `http://localhost:8000/v1` | base URL do servidor local OpenAI-compatible |
 | `LOCAL_STT_MODEL` | `parakeet-tdt-0.6b-v3` | modelo STT local |
-| `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`raw`) |
+| `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`reuniao`/`raw`) |
 | `VOXPROMPT_DB` | `./voxprompt.db` | caminho do SQLite com o histórico de transcrições |
 | `CLAUDE_BIN` | `claude` | binário do Claude Code |
 | `CLAUDE_MODEL` | `sonnet` | modelo do `claude -p` na estruturação (`sonnet`/`opus`/`haiku`). Vazio = herda o default do CLI |
@@ -85,7 +85,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 |---|---|
 | `r` | inicia/para gravação (`● Gravando mm:ss`) |
 | `s` | alterna STT `local` ↔ `openai` |
-| `t` | cicla template `spec → commit → prompt → financeiro → marketing → formal → whatsapp → raw` |
+| `t` | cicla template `spec → commit → prompt → financeiro → marketing → formal → whatsapp → reuniao → raw` |
 | `c` | copia o resultado ativo para o clipboard |
 | `l` | reestrutura a última transcrição com o template atual (sem regravar) |
 | `h` | mostra/oculta o histórico |
@@ -104,6 +104,7 @@ transcrições de sessões anteriores.
 - **`marketing`** — reescrita com linguagem de marketing persuasiva.
 - **`formal`** — mensagem formal (e-mail profissional).
 - **`whatsapp`** — mensagem informal de WhatsApp.
+- **`reuniao`** — transcrição de reunião em duas partes: _Transcrição limpa_ (conteúdo fiel e completo, sem vícios de linguagem nem resumo) e _Consolidado da reunião_ (decisões tomadas, próximos passos, pontos em aberto).
 - **`raw`** — transcrição sem reescrita (não chama o Claude).
 
 ## STT local (Parakeet)
