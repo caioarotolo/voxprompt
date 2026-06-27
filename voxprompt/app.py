@@ -210,13 +210,15 @@ class VoxPromptApp(App):
     @work(thread=True, group="process")
     def _process_worker(self, path: str, duration: float, cleanup: bool = True) -> None:
         try:
-            self._process_file_sync(path, duration)
+            self._process_file_sync(path, duration, checkpoint_raw=not cleanup)
         finally:
             self._stop_local_stt_progress()
             if cleanup:
                 self._safe_remove(path)  # WAV gravado é temporário; arquivo solto não.
 
-    def _process_file_sync(self, path: str, duration: float) -> None:
+    def _process_file_sync(
+        self, path: str, duration: float, checkpoint_raw: bool = False
+    ) -> None:
         backend = self.stt_backend
         template = self.template
         raw_entry_id: int | None = None
@@ -242,7 +244,7 @@ class VoxPromptApp(App):
             self.call_from_thread(self._set_state, "idle")
             return
 
-        if self._is_long_audio(path, duration):
+        if checkpoint_raw or self._is_long_audio(path, duration):
             entry = self.call_from_thread(
                 self._commit_entry,
                 raw,

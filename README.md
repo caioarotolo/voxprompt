@@ -186,9 +186,10 @@ falhará com erro claro se `OPENAI_API_KEY` não estiver definida).
 - **Concorrência**: gravação, STT e `claude -p` rodam em threads (`@work(thread=True)`),
   com `threading.Event` para o toggle e `call_from_thread` para atualizar a UI — a TUI
   nunca trava. Ações inválidas durante gravação/processamento são ignoradas com aviso.
-- **Áudios longos**: ao detectar duração acima de 30 min ou arquivo a partir de 100 MB,
-  a transcrição crua é salva no SQLite antes da estruturação com Claude. Se o Claude
-  falhar ou expirar, o histórico preserva o texto bruto com estruturação vazia.
+- **Checkpoint do raw**: arquivos arrastados salvam a transcrição crua no SQLite assim
+  que o STT termina, antes da estruturação com Claude. Gravações também fazem esse
+  checkpoint ao detectar duração acima de 30 min ou arquivo a partir de 100 MB. Se o
+  Claude falhar ou expirar, o histórico preserva o texto bruto com estruturação vazia.
 - **Estruturação longa**: textos grandes são divididos em blocos para chamadas parciais
   ao Claude e consolidação final. No template `reuniao`, a Transcrição limpa é gerada
   por blocos e concatenada antes do consolidado, sem resumir essa parte.

@@ -51,6 +51,54 @@ class RawPersistenceTest(unittest.TestCase):
             self.assertEqual(entry.status, "structure_failed")
             app.history.close()
 
+    def test_dropped_file_checkpoints_raw_before_structure_even_when_size_is_small(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "history.db")
+            audio_path = os.path.join(tmpdir, "meeting.m4a")
+            with open(audio_path, "wb") as audio_file:
+                audio_file.write(b"small-audio")
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "VOXPROMPT_DB": db_path,
+                    "STT_BACKEND": "openai",
+                    "OPENAI_API_KEY": "test-key",
+                    "VOXPROMPT_TEMPLATE": "spec",
+                },
+            ):
+                app = VoxPromptApp()
+
+            app.call_from_thread = lambda callback, *args: callback(*args)
+            app._update_panel = lambda *_args: None
+            app._add_history_row = lambda *_args: None
+            app._replace_history_row = lambda *_args: None
+            app._set_state = lambda value: setattr(app, "_test_state", value)
+            app._on_error = lambda message: setattr(app, "_error_msg", message)
+
+            def fail_after_checkpoint(_raw, _template, _config):
+                entry = app.history.latest()
+                self.assertIsNotNone(entry)
+                self.assertEqual(entry.raw_text, "transcrição de reunião")
+                self.assertEqual(entry.structured_text, "")
+                self.assertEqual(entry.status, "raw_saved")
+                raise RuntimeError("timeout")
+
+            with mock.patch(
+                "voxprompt.app.transcribe.transcribe",
+                return_value="transcrição de reunião",
+            ), mock.patch(
+                "voxprompt.app.structure.structure", side_effect=fail_after_checkpoint
+            ), mock.patch.object(app, "_is_long_audio", return_value=False):
+                app._process_file_sync(audio_path, 0.0, checkpoint_raw=True)
+
+            entry = app.history.latest()
+            self.assertIsNotNone(entry)
+            self.assertEqual(entry.raw_text, "transcrição de reunião")
+            self.assertEqual(entry.structured_text, "")
+            self.assertEqual(entry.status, "structure_failed")
+            app.history.close()
+
 
 if __name__ == "__main__":
     unittest.main()
