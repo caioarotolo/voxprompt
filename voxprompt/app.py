@@ -1,15 +1,16 @@
 import os
 import threading
 import time
+from pathlib import Path
 
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Static, TextArea
 
-from voxprompt import audio, clipboard, structure, transcribe
+from voxprompt import audio, clipboard, dropfile, structure, transcribe
 from voxprompt.config import TEMPLATES, Config, load_config
 from voxprompt.history import HistoryEntry, HistoryStore
 from voxprompt.widgets import StatusBar, VoxHeader
@@ -18,6 +19,7 @@ TEMPLATE_ORDER = TEMPLATES  # ordem do ciclo da tecla `t`; fonte única em confi
 BUSY_STATES = ("recording", "transcribing", "structuring")
 PREVIEW_CHARS = 60
 HISTORY_LIMIT = 100  # transcrições carregadas do SQLite ao abrir
+OPENAI_MAX_BYTES = 25 * 1024 * 1024  # limite de upload da API de transcrição da OpenAI
 
 
 class VoxPromptApp(App):
@@ -159,14 +161,48 @@ class VoxPromptApp(App):
         self.call_from_thread(self._track_temp, path)
         self.call_from_thread(self._start_processing, path, duration)
 
+    # ---------- arquivo solto (drag-and-drop) ----------
+
+    def on_paste(self, event: events.Paste) -> None:
+        """Arrastar um arquivo para o terminal cola o caminho dele (bracketed paste).
+
+        Tratamos só quando o texto colado aponta para um arquivo existente; colagens de
+        texto comum seguem o fluxo normal (os painéis são read-only e ignoram).
+        """
+        path = dropfile.parse_dropped_path(event.text)
+        if path is None or not os.path.isfile(path):
+            return
+        event.stop()
+        self._transcribe_file(path)
+
+    def _transcribe_file(self, path: str) -> None:
+        if self.state in BUSY_STATES:
+            self.notify("Aguarde o processamento atual.", severity="warning")
+            return
+        if not dropfile.is_supported(path):
+            ext = Path(path).suffix.lower() or "sem extensão"
+            self._on_error(f"Formato de áudio não suportado: {ext}.")
+            return
+        if self.stt_backend == "openai":
+            size = os.path.getsize(path)
+            if size > OPENAI_MAX_BYTES:
+                mb = size / (1024 * 1024)
+                self._on_error(
+                    f"Arquivo de {mb:.1f} MB excede o limite de 25 MB da API OpenAI. "
+                    "Use o STT local (tecla s) ou reduza o arquivo."
+                )
+                return
+        self.notify(f"Transcrevendo {os.path.basename(path)}…")
+        self._start_processing(path, 0.0, cleanup=False)
+
     # ---------- processamento (STT + estruturação) ----------
 
-    def _start_processing(self, path: str, duration: float) -> None:
+    def _start_processing(self, path: str, duration: float, cleanup: bool = True) -> None:
         self.state = "transcribing"
-        self._process_worker(path, duration)
+        self._process_worker(path, duration, cleanup)
 
     @work(thread=True, group="process")
-    def _process_worker(self, path: str, duration: float) -> None:
+    def _process_worker(self, path: str, duration: float, cleanup: bool = True) -> None:
         backend = self.stt_backend
         template = self.template
         try:
@@ -196,7 +232,8 @@ class VoxPromptApp(App):
             )
             self.call_from_thread(self._set_state, "idle")
         finally:
-            self._safe_remove(path)
+            if cleanup:
+                self._safe_remove(path)  # WAV gravado é temporário; arquivo solto não.
 
     # ---------- reestruturar última transcrição ----------
 

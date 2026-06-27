@@ -1,9 +1,9 @@
 # VoxPrompt
 
-TUI Linux que **grava sua voz**, **transcreve** (STT local Parakeet ou OpenAI) e
-**reescreve a fala como um pedido de engenharia** via `claude -p`. Exibe transcrição
-crua e resultado estruturado lado a lado, mantém histórico da sessão em memória e
-copia o resultado para o clipboard.
+TUI Linux que **grava sua voz** (ou recebe um **arquivo de áudio arrastado**),
+**transcreve** (STT local Parakeet ou OpenAI) e **reescreve a fala como um pedido de
+engenharia** via `claude -p`. Exibe transcrição crua e resultado estruturado lado a lado,
+mantém histórico da sessão em memória e copia o resultado para o clipboard.
 
 ```
 ┌ VoxPrompt   STT: local   Template: spec   Claude: idle ─────────────────────┐
@@ -95,6 +95,24 @@ Selecionar uma linha do histórico recarrega os dois painéis. O histórico é g
 em SQLite local (`voxprompt.db`) e, ao abrir, a TUI recarrega as últimas 100
 transcrições de sessões anteriores.
 
+## Arrastar arquivo de áudio (drag-and-drop)
+
+Arraste um arquivo de áudio (gravação de reunião, áudio do WhatsApp, etc.) **para dentro
+da janela do terminal**. O terminal cola o caminho do arquivo e a TUI o transcreve com o
+STT atual, preenchendo a transcrição crua — daí em diante o fluxo é igual ao da gravação:
+troque o template com `t`, reestruture com `l`, copie com `c`.
+
+- **Formatos aceitos:** `.mp3`, `.mp4`, `.m4a`, `.wav`, `.ogg`, `.oga`, `.opus`, `.webm`,
+  `.flac`, `.mpeg`, `.mpga`, `.aac`. Formato não reconhecido → erro imediato, sem upload.
+- **Limite de tamanho:** no backend `openai` a API recusa arquivos acima de **25 MB** — a TUI
+  bloqueia antes de enviar e sugere usar o STT local (`s`). O backend `local` não tem esse
+  limite no cliente (depende do seu servidor Parakeet).
+- O **arquivo original não é alterado nem apagado** (só o WAV gravado pelo microfone é temporário).
+
+> O drag-and-drop depende do terminal colar o caminho do arquivo ao soltá-lo (suportado por
+> GNOME Terminal, Konsole, kitty, iTerm2, entre outros). Se o seu terminal não fizer isso,
+> nenhum outro fluxo é afetado.
+
 ## Templates
 
 - **`spec`** — especificação com seções _Objetivo, Contexto, Requisitos, Critérios de aceite, Dúvidas_.
@@ -148,8 +166,9 @@ falhará com erro claro se `OPENAI_API_KEY` não estiver definida).
 
 ## Notas de design
 
-- **Sem persistência em disco**: histórico vive só na memória da sessão.
+- **Histórico em disco**: persistido em SQLite local (`voxprompt.db`); ao abrir, recarrega as últimas 100 transcrições.
 - **WAV temporário** 16 kHz mono é criado por gravação e **removido após o uso** e na saída.
+  Arquivos **arrastados** são lidos no lugar e **nunca apagados**.
 - **Concorrência**: gravação, STT e `claude -p` rodam em threads (`@work(thread=True)`),
   com `threading.Event` para o toggle e `call_from_thread` para atualizar a UI — a TUI
   nunca trava. Ações inválidas durante gravação/processamento são ignoradas com aviso.
