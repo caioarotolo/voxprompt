@@ -45,6 +45,20 @@ sudo apt install -y libportaudio2 wl-clipboard      # ou: xclip
 source .venv/bin/activate && python -m voxprompt
 ```
 
+### Atalho: alias `voxprompt` (opcional)
+
+Para chamar a TUI de qualquer diretório digitando só `voxprompt` — sem ativar a venv.
+Rode **de dentro do diretório do repositório** (após o `setup.sh`):
+
+```bash
+echo "alias voxprompt='PYTHONPATH=$(pwd) $(pwd)/.venv/bin/python -m voxprompt'" >> ~/.bashrc
+source ~/.bashrc
+```
+
+O `$(pwd)` grava o caminho absoluto do seu clone no alias. Usa o Python da venv
+direto (deps disponíveis) e acha o `.env` pelo caminho do módulo, não pelo diretório atual.
+Em zsh, troque `~/.bashrc` por `~/.zshrc`.
+
 ## Configuração (variáveis de ambiente)
 
 | Variável | Default | Descrição |
