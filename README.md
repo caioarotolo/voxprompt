@@ -132,3 +132,7 @@ falhará com erro claro se `OPENAI_API_KEY` não estiver definida).
   com `threading.Event` para o toggle e `call_from_thread` para atualizar a UI — a TUI
   nunca trava. Ações inválidas durante gravação/processamento são ignoradas com aviso.
 - **Falhas** de microfone, rede, STT, Claude ou clipboard aparecem na StatusBar sem crash.
+
+## Licença
+
+MIT — veja [LICENSE](LICENSE). © 2026 Caio Rotolo.
