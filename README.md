@@ -89,9 +89,11 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `c` | copia o resultado ativo para o clipboard |
 | `l` | reestrutura a última transcrição com o template atual (sem regravar) |
 | `h` | mostra/oculta o histórico |
+| `Del` | apaga a transcrição selecionada no histórico (tabela + SQLite) |
 | `q` | sai |
 
-Selecionar uma linha do histórico recarrega os dois painéis. O histórico é gravado
+Selecionar uma linha do histórico recarrega os dois painéis; `Del` apaga a linha
+destacada (navegue com as setas, foque a tabela com `Tab`). O histórico é gravado
 em SQLite local (`voxprompt.db`) e, ao abrir, a TUI recarrega as últimas 100
 transcrições de sessões anteriores.
 

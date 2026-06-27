@@ -94,6 +94,10 @@ class HistoryStore:
         ).fetchall()
         return [_row_to_entry(row) for row in reversed(rows)]
 
+    def delete(self, entry_id: int) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM transcriptions WHERE id = ?", (entry_id,))
+
     def close(self) -> None:
         self._conn.close()
 

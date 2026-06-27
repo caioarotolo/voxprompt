@@ -33,6 +33,7 @@ class VoxPromptApp(App):
         Binding("c", "copy_result", "Copiar"),
         Binding("l", "restructure_last", "Reestruturar"),
         Binding("h", "toggle_history", "Histórico"),
+        Binding("delete", "delete_history_row", "Apagar"),
         Binding("q", "quit", "Sair"),
     ]
 
@@ -355,6 +356,21 @@ class VoxPromptApp(App):
     def action_toggle_history(self) -> None:
         table = self.query_one("#history", DataTable)
         table.display = not table.display
+
+    def action_delete_history_row(self) -> None:
+        table = self.query_one("#history", DataTable)
+        if table.row_count == 0:
+            self.notify("Histórico vazio.", severity="warning")
+            return
+        row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+        entry_id = int(row_key.value)
+        self.history.delete(entry_id)
+        table.remove_row(row_key)
+        if self._active_entry is not None and self._active_entry.id == entry_id:
+            self._active_entry = None
+            self._update_panel("raw", "")
+            self._update_panel("structured", "")
+        self.notify(f"Transcrição #{entry_id} apagada.")
 
     # ---------- erros / temporários / saída ----------
 
