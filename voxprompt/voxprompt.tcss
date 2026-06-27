@@ -1,0 +1,68 @@
+Screen {
+    layout: vertical;
+}
+
+#header {
+    height: 1;
+    background: $boost;
+    color: $text;
+    padding: 0 1;
+}
+
+#anthropic-alert {
+    height: auto;
+    background: red;
+    color: white;
+    text-style: bold;
+    padding: 0 1;
+}
+
+#panels {
+    height: 1fr;
+}
+
+#raw, #structured {
+    width: 1fr;
+    height: 100%;
+    border: round $primary;
+    border-title-color: $accent;
+    border-title-align: left;
+}
+
+#history {
+    height: 12;
+    border: round $secondary;
+}
+
+#status {
+    height: 1;
+    padding: 0 1;
+}
+
+.s-idle {
+    background: $panel;
+    color: $text;
+}
+
+.s-recording {
+    background: $error;
+    color: $text;
+    text-style: bold;
+}
+
+.s-busy {
+    background: $warning;
+    color: black;
+}
+
+.s-error {
+    background: red;
+    color: white;
+    text-style: bold;
+}
+
+.s-ok {
+    background: $success;
+    color: black;
+    text-style: bold;
+}
