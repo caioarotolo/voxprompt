@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 STT_BACKENDS = ("local", "openai")
-TEMPLATES = ("spec", "commit", "prompt", "raw")
+TEMPLATES = ("spec", "commit", "prompt", "financeiro", "marketing", "formal", "whatsapp", "raw")
 
 
 def _load_dotenv() -> None:

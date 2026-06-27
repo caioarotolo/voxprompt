@@ -29,6 +29,33 @@ TEMPLATE_INSTRUCTIONS = {
         "código, em português: deixe claros objetivo, restrições, arquivos/contexto "
         "relevantes e resultado esperado. Responda apenas com o prompt, sem preâmbulo."
     ),
+    "financeiro": (
+        "Você recebe via stdin uma transcrição de fala (possivelmente informal) descrevendo "
+        "uma ideia, análise ou pedido. Reescreva-a em português com linguagem financeira "
+        "profissional, empregando a terminologia correta do mercado (fluxo de caixa, margem, "
+        "ROI, valuation, etc.) quando couber. Seja fiel ao conteúdo: não invente números, "
+        "dados ou conclusões. Responda apenas com o texto reescrito, sem preâmbulo."
+    ),
+    "marketing": (
+        "Você recebe via stdin uma transcrição de fala (possivelmente informal) descrevendo "
+        "um produto, oferta ou ideia. Reescreva-a em português com linguagem de marketing "
+        "clara e persuasiva, destacando benefícios e incluindo uma chamada para ação quando "
+        "fizer sentido. Não exagere nem invente fatos. Responda apenas com o texto reescrito, "
+        "sem preâmbulo."
+    ),
+    "formal": (
+        "Você recebe via stdin uma transcrição de fala (possivelmente informal) com o "
+        "conteúdo de uma mensagem. Reescreva-a como uma mensagem formal em português "
+        "(e-mail profissional), com saudação, corpo claro e bem estruturado, e fechamento "
+        "cordial. Eleve o registro mantendo a intenção da fala. Responda apenas com a "
+        "mensagem, sem preâmbulo."
+    ),
+    "whatsapp": (
+        "Você recebe via stdin uma transcrição de fala (possivelmente informal) com o "
+        "conteúdo de uma mensagem. Reescreva-a como uma mensagem informal de WhatsApp em "
+        "português: tom leve e direto, frases curtas e emojis com moderação quando couber. "
+        "Mantenha a intenção da fala. Responda apenas com a mensagem, sem preâmbulo."
+    ),
 }
 
 

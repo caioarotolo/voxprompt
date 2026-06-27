@@ -67,7 +67,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | modelo STT no backend `openai` |
 | `LOCAL_STT_URL` | `http://localhost:8000/v1` | base URL do servidor local OpenAI-compatible |
 | `LOCAL_STT_MODEL` | `parakeet-tdt-0.6b-v3` | modelo STT local |
-| `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`raw`) |
+| `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`raw`) |
 | `CLAUDE_BIN` | `claude` | binário do Claude Code |
 | `CLAUDE_MODEL` | `sonnet` | modelo do `claude -p` na estruturação (`sonnet`/`opus`/`haiku`). Vazio = herda o default do CLI |
 | `OPENAI_API_KEY` | — | **exigido só no backend `openai`** |
@@ -84,7 +84,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 |---|---|
 | `r` | inicia/para gravação (`● Gravando mm:ss`) |
 | `s` | alterna STT `local` ↔ `openai` |
-| `t` | cicla template `spec → commit → prompt → raw` |
+| `t` | cicla template `spec → commit → prompt → financeiro → marketing → formal → whatsapp → raw` |
 | `c` | copia o resultado ativo para o clipboard |
 | `l` | reestrutura a última transcrição com o template atual (sem regravar) |
 | `h` | mostra/oculta o histórico |
@@ -97,6 +97,10 @@ Selecionar uma linha do histórico recarrega os dois painéis.
 - **`spec`** — especificação com seções _Objetivo, Contexto, Requisitos, Critérios de aceite, Dúvidas_.
 - **`commit`** — mensagem de commit (título imperativo + corpo).
 - **`prompt`** — prompt direto e acionável para um agente de código.
+- **`financeiro`** — reescrita com linguagem financeira profissional.
+- **`marketing`** — reescrita com linguagem de marketing persuasiva.
+- **`formal`** — mensagem formal (e-mail profissional).
+- **`whatsapp`** — mensagem informal de WhatsApp.
 - **`raw`** — transcrição sem reescrita (não chama o Claude).
 
 ## STT local (Parakeet)

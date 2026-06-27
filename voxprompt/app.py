@@ -10,11 +10,11 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Static, TextArea
 
 from voxprompt import audio, clipboard, structure, transcribe
-from voxprompt.config import Config, load_config
+from voxprompt.config import TEMPLATES, Config, load_config
 from voxprompt.history import HistoryEntry, SessionHistory
 from voxprompt.widgets import StatusBar, VoxHeader
 
-TEMPLATE_ORDER = ("spec", "commit", "prompt", "raw")
+TEMPLATE_ORDER = TEMPLATES  # ordem do ciclo da tecla `t`; fonte única em config.TEMPLATES
 BUSY_STATES = ("recording", "transcribing", "structuring")
 PREVIEW_CHARS = 60
 
