@@ -100,9 +100,9 @@ class VoxPromptApp(App):
         # "recording" é dirigido pelo cronômetro (_tick).
 
     def _refresh_header(self) -> None:
-        claude_status = {"structuring": "estruturando…", "error": "erro"}.get(
-            self.state, "idle"
-        )
+        # "Claude:" reflete só o subprocess de estruturação; erros gerais (ex.: clipboard)
+        # aparecem na StatusBar vermelha, não aqui.
+        claude_status = "estruturando…" if self.state == "structuring" else "idle"
         self.query_one("#header", VoxHeader).update_info(
             self.stt_backend, self.template, claude_status
         )
