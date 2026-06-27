@@ -3,7 +3,7 @@
 TUI Linux que **grava sua voz** (ou recebe um **arquivo de áudio arrastado**),
 **transcreve** (STT local Parakeet ou OpenAI) e **reescreve a fala como um pedido de
 engenharia** via `claude -p`. Exibe transcrição crua e resultado estruturado lado a lado,
-mantém histórico da sessão em memória e copia o resultado para o clipboard.
+mantém histórico em SQLite e copia o resultado para o clipboard.
 
 ```
 ┌ VoxPrompt   STT: local   Template: spec   Claude: idle ─────────────────────┐
@@ -71,6 +71,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `VOXPROMPT_DB` | `./voxprompt.db` | caminho do SQLite com o histórico de transcrições |
 | `CLAUDE_BIN` | `claude` | binário do Claude Code |
 | `CLAUDE_MODEL` | `sonnet` | modelo do `claude -p` na estruturação (`sonnet`/`opus`/`haiku`). Vazio = herda o default do CLI |
+| `VOXPROMPT_CLAUDE_TIMEOUT_SEC` | `300` | timeout, em segundos, para cada chamada `claude -p` |
 | `OPENAI_API_KEY` | — | **exigido só no backend `openai`** |
 
 > ⚠ **`ANTHROPIC_API_KEY`** não é configuração do VoxPrompt. Se estiver no ambiente,
@@ -140,6 +141,17 @@ em `localhost:8000` antes de gravar:
 your-parakeet-server --host 0.0.0.0 --port 8000 --model parakeet-tdt-0.6b-v3
 ```
 
+Antes de enviar áudio ao backend local, o VoxPrompt tenta consultar `/status` na raiz
+do servidor (por exemplo, `http://localhost:8000/status`). Se o servidor informar que
+já está processando outro áudio, a nova transcrição é bloqueada com aviso claro para
+evitar concorrência pesada no backend. Se `/status` falhar, a TUI apenas avisa e mantém
+o comportamento anterior.
+
+Durante uma transcrição local longa, a TUI consulta `/status` e `/metrics`
+periodicamente e mostra progresso na StatusBar quando o servidor expõe campos como
+chunk atual/total, percentual, CPU ou RAM. Se esses campos não existirem, a mensagem
+volta ao estado simples de transcrição.
+
 Se o servidor estiver offline, o VoxPrompt **não trava**: mostra um erro claro na
 StatusBar e segue pronto para nova tentativa.
 
@@ -174,6 +186,12 @@ falhará com erro claro se `OPENAI_API_KEY` não estiver definida).
 - **Concorrência**: gravação, STT e `claude -p` rodam em threads (`@work(thread=True)`),
   com `threading.Event` para o toggle e `call_from_thread` para atualizar a UI — a TUI
   nunca trava. Ações inválidas durante gravação/processamento são ignoradas com aviso.
+- **Áudios longos**: ao detectar duração acima de 30 min ou arquivo a partir de 100 MB,
+  a transcrição crua é salva no SQLite antes da estruturação com Claude. Se o Claude
+  falhar ou expirar, o histórico preserva o texto bruto com estruturação vazia.
+- **Estruturação longa**: textos grandes são divididos em blocos para chamadas parciais
+  ao Claude e consolidação final. No template `reuniao`, a Transcrição limpa é gerada
+  por blocos e concatenada antes do consolidado, sem resumir essa parte.
 - **Falhas** de microfone, rede, STT, Claude ou clipboard aparecem na StatusBar sem crash.
 
 ## Licença

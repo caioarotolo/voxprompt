@@ -1,0 +1,56 @@
+import os
+import tempfile
+import unittest
+from unittest import mock
+
+try:
+    from voxprompt.app import LONG_AUDIO_SECONDS, VoxPromptApp
+except ModuleNotFoundError as exc:
+    if exc.name != "textual":
+        raise
+    raise unittest.SkipTest("textual is not installed") from exc
+
+
+class RawPersistenceTest(unittest.TestCase):
+    def test_long_audio_raw_is_persisted_when_structure_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "history.db")
+            audio_path = os.path.join(tmpdir, "audio.wav")
+            with open(audio_path, "wb") as audio_file:
+                audio_file.write(b"audio")
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "VOXPROMPT_DB": db_path,
+                    "STT_BACKEND": "openai",
+                    "OPENAI_API_KEY": "test-key",
+                    "VOXPROMPT_TEMPLATE": "spec",
+                },
+            ):
+                app = VoxPromptApp()
+
+            app.call_from_thread = lambda callback, *args: callback(*args)
+            app._update_panel = lambda *_args: None
+            app._add_history_row = lambda *_args: None
+            app._replace_history_row = lambda *_args: None
+            app._set_state = lambda value: setattr(app, "_test_state", value)
+            app._on_error = lambda message: setattr(app, "_error_msg", message)
+
+            with mock.patch(
+                "voxprompt.app.transcribe.transcribe", return_value="transcrição bruta"
+            ), mock.patch(
+                "voxprompt.app.structure.structure", side_effect=RuntimeError("timeout")
+            ):
+                app._process_file_sync(audio_path, float(LONG_AUDIO_SECONDS))
+
+            entry = app.history.latest()
+            self.assertIsNotNone(entry)
+            self.assertEqual(entry.raw_text, "transcrição bruta")
+            self.assertEqual(entry.structured_text, "")
+            self.assertEqual(entry.status, "structure_failed")
+            app.history.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

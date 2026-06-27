@@ -27,8 +27,17 @@ class Config:
     db_path: str
     claude_bin: str
     claude_model: str  # alias passado em `claude --model`; vazio = herda o default do CLI
+    claude_timeout_sec: int
     openai_api_key: str | None
     anthropic_api_key_present: bool
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, "").strip())
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 def load_config() -> Config:
@@ -51,6 +60,7 @@ def load_config() -> Config:
         db_path=os.getenv("VOXPROMPT_DB", "").strip() or str(PROJECT_ROOT / "voxprompt.db"),
         claude_bin=os.getenv("CLAUDE_BIN", "claude"),
         claude_model=os.getenv("CLAUDE_MODEL", "sonnet").strip(),
+        claude_timeout_sec=_env_int("VOXPROMPT_CLAUDE_TIMEOUT_SEC", 300),
         openai_api_key=os.getenv("OPENAI_API_KEY") or None,
         anthropic_api_key_present=bool(os.getenv("ANTHROPIC_API_KEY")),
     )

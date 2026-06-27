@@ -13,6 +13,7 @@ class HistoryEntry:
     raw_text: str
     structured_text: str
     duration_sec: float
+    status: str = "complete"
 
 
 _SCHEMA = """
@@ -23,7 +24,8 @@ CREATE TABLE IF NOT EXISTS transcriptions (
     template        TEXT    NOT NULL,
     raw_text        TEXT    NOT NULL,
     structured_text TEXT    NOT NULL,
-    duration_sec    REAL    NOT NULL
+    duration_sec    REAL    NOT NULL,
+    status          TEXT    NOT NULL DEFAULT 'complete'
 );
 """
 
@@ -41,6 +43,18 @@ class HistoryStore:
         self._conn.row_factory = sqlite3.Row
         with self._conn:
             self._conn.execute(_SCHEMA)
+            self._migrate()
+
+    def _migrate(self) -> None:
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(transcriptions)").fetchall()
+        }
+        if "status" not in columns:
+            self._conn.execute(
+                "ALTER TABLE transcriptions "
+                "ADD COLUMN status TEXT NOT NULL DEFAULT 'complete'"
+            )
 
     def add(
         self,
@@ -49,13 +63,15 @@ class HistoryStore:
         raw_text: str,
         structured_text: str,
         duration_sec: float,
+        status: str = "complete",
     ) -> HistoryEntry:
         timestamp = datetime.now()
         with self._conn:
             cur = self._conn.execute(
                 "INSERT INTO transcriptions "
-                "(timestamp, stt_backend, template, raw_text, structured_text, duration_sec) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "(timestamp, stt_backend, template, raw_text, structured_text, "
+                "duration_sec, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     timestamp.isoformat(),
                     stt_backend,
@@ -63,6 +79,7 @@ class HistoryStore:
                     raw_text,
                     structured_text,
                     duration_sec,
+                    status,
                 ),
             )
         return HistoryEntry(
@@ -73,7 +90,18 @@ class HistoryStore:
             raw_text=raw_text,
             structured_text=structured_text,
             duration_sec=duration_sec,
+            status=status,
         )
+
+    def update_structured(
+        self, entry_id: int, structured_text: str, status: str = "complete"
+    ) -> HistoryEntry | None:
+        with self._conn:
+            self._conn.execute(
+                "UPDATE transcriptions SET structured_text = ?, status = ? WHERE id = ?",
+                (structured_text, status, entry_id),
+            )
+        return self.get(entry_id)
 
     def get(self, entry_id: int) -> HistoryEntry | None:
         row = self._conn.execute(
@@ -111,4 +139,5 @@ def _row_to_entry(row: sqlite3.Row) -> HistoryEntry:
         raw_text=row["raw_text"],
         structured_text=row["structured_text"],
         duration_sec=row["duration_sec"],
+        status=row["status"] if "status" in row.keys() else "complete",
     )

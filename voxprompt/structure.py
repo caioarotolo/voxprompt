@@ -3,7 +3,7 @@ import subprocess
 
 from voxprompt.config import Config
 
-CLAUDE_TIMEOUT_SEC = 120
+STRUCTURE_CHUNK_CHARS = 24000
 
 # Instruções passadas em `claude -p <instrucao>`. A transcrição vai por stdin;
 # o Claude Code concatena stdin + prompt no contexto.
@@ -61,7 +61,7 @@ TEMPLATE_INSTRUCTIONS = {
         "saída em Markdown com EXATAMENTE estas duas partes, nesta ordem.\n\n"
         "## Transcrição limpa\n"
         "Reproduza TODO o conteúdo da reunião fielmente, sem cortar, resumir nem omitir "
-        "nenhum ponto discutido. Esta parte é transcrição, não síntese — jamais a resuma. "
+        "nenhum ponto discutido. Esta parte é transcrição, não síntese - jamais a resuma. "
         "Remova APENAS: vícios de linguagem ('então', 'tipo', 'né', 'assim', 'é', "
         "hesitações), repetições excessivas da mesma frase e ruídos de fala sem conteúdo. "
         "Mantenha a voz de cada participante, a ordem cronológica e todos os detalhes ditos.\n\n"
@@ -78,15 +78,60 @@ TEMPLATE_INSTRUCTIONS = {
     ),
 }
 
+REUNIAO_CLEAN_CHUNK_INSTRUCTION = (
+    "Você recebe via stdin UM BLOCO de uma transcrição bruta de reunião em português. "
+    "Limpe somente este bloco e responda apenas com a transcrição limpa do bloco, sem "
+    "título. Reproduza TODO o conteúdo fielmente, sem cortar, resumir nem omitir nenhum "
+    "ponto discutido. Remova apenas vícios de linguagem, hesitações, repetições excessivas "
+    "da mesma frase e ruídos de fala sem conteúdo. Mantenha participantes, ordem "
+    "cronológica e detalhes."
+)
+
+REUNIAO_CONSOLIDATE_INSTRUCTION = (
+    "Você recebe via stdin a Transcrição limpa completa de uma reunião. Produza apenas o "
+    "Consolidado da reunião em Markdown, baseado somente no que foi dito, sem inferências. "
+    "Use estas subseções: ### Decisões tomadas, ### Próximos passos, ### Pontos em aberto. "
+    "Omita listas vazias. Não inclua a seção Transcrição limpa."
+)
+
 
 class StructureError(RuntimeError):
     """Falha ao estruturar via `claude -p` (binário ausente, timeout, returncode != 0)."""
+
+
+def split_text_chunks(text: str, max_chars: int | None = None) -> list[str]:
+    """Divide texto longo em blocos aproximados, preservando quebras de linha."""
+    max_chars = STRUCTURE_CHUNK_CHARS if max_chars is None else max_chars
+    if max_chars <= 0:
+        raise ValueError("max_chars deve ser positivo")
+    if len(text) <= max_chars:
+        return [text]
+
+    chunks: list[str] = []
+    current = ""
+    for line in text.splitlines(keepends=True):
+        while len(line) > max_chars:
+            if current:
+                chunks.append(current.rstrip())
+                current = ""
+            chunks.append(line[:max_chars].rstrip())
+            line = line[max_chars:]
+
+        if current and len(current) + len(line) > max_chars:
+            chunks.append(current.rstrip())
+            current = ""
+        current += line
+
+    if current:
+        chunks.append(current.rstrip())
+    return [chunk for chunk in chunks if chunk]
 
 
 def structure(text: str, template: str, config: Config) -> str:
     """`raw` retorna a transcrição como veio. Os demais chamam `claude -p`.
 
     Remove ANTHROPIC_API_KEY do ambiente do subprocess para não forçar billing via API.
+    Textos curtos preservam o fluxo antigo; textos longos são processados em blocos.
     """
     if template == "raw":
         return text
@@ -95,6 +140,62 @@ def structure(text: str, template: str, config: Config) -> str:
     if instruction is None:
         raise StructureError(f"Template desconhecido: {template!r}")
 
+    chunks = split_text_chunks(text)
+    if len(chunks) == 1:
+        return _run_claude(text, instruction, config)
+    if template == "reuniao":
+        return _structure_long_reuniao(chunks, config)
+    return _structure_long_generic(chunks, instruction, template, config)
+
+
+def _structure_long_generic(
+    chunks: list[str], instruction: str, template: str, config: Config
+) -> str:
+    partial_instruction = (
+        f"{instruction}\n\n"
+        "Você está processando apenas um bloco de uma transcrição longa. Preserve os "
+        "fatos e ambiguidades deste bloco; não invente informações para preencher lacunas."
+    )
+    partials = [
+        _run_claude(chunk, partial_instruction, config)
+        for chunk in chunks
+    ]
+    final_instruction = (
+        f"Você recebe via stdin resultados parciais do template {template!r}, gerados a "
+        "partir de blocos sequenciais da mesma transcrição. Consolide em uma única saída "
+        "final coerente, remova duplicações entre blocos e preserve apenas informações "
+        "presentes nos parciais. Responda apenas com o resultado final, sem preâmbulo.\n\n"
+        f"Instrução original do template: {instruction}"
+    )
+    return _run_claude("\n\n--- BLOCO ---\n\n".join(partials), final_instruction, config)
+
+
+def _structure_long_reuniao(chunks: list[str], config: Config) -> str:
+    clean_chunks = [
+        _run_claude(chunk, REUNIAO_CLEAN_CHUNK_INSTRUCTION, config)
+        for chunk in chunks
+    ]
+    clean_transcript = "\n\n".join(clean_chunks).strip()
+    consolidated = _run_claude(
+        clean_transcript, REUNIAO_CONSOLIDATE_INSTRUCTION, config
+    ).strip()
+    consolidated = _strip_heading(consolidated, "## Consolidado da reunião")
+    return (
+        "## Transcrição limpa\n"
+        f"{clean_transcript}\n\n"
+        "## Consolidado da reunião\n"
+        f"{consolidated}"
+    ).strip()
+
+
+def _strip_heading(text: str, heading: str) -> str:
+    stripped = text.strip()
+    if stripped.lower().startswith(heading.lower()):
+        return stripped[len(heading):].strip()
+    return stripped
+
+
+def _run_claude(text: str, instruction: str, config: Config) -> str:
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
@@ -110,7 +211,7 @@ def structure(text: str, template: str, config: Config) -> str:
             capture_output=True,
             text=True,
             env=env,
-            timeout=CLAUDE_TIMEOUT_SEC,
+            timeout=config.claude_timeout_sec,
         )
     except FileNotFoundError as exc:
         raise StructureError(
@@ -118,7 +219,7 @@ def structure(text: str, template: str, config: Config) -> str:
         ) from exc
     except subprocess.TimeoutExpired as exc:
         raise StructureError(
-            f"claude excedeu o tempo limite ({CLAUDE_TIMEOUT_SEC}s)."
+            f"claude excedeu o tempo limite ({config.claude_timeout_sec}s)."
         ) from exc
 
     if proc.returncode != 0:

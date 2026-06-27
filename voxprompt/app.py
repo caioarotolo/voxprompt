@@ -20,6 +20,9 @@ BUSY_STATES = ("recording", "transcribing", "structuring")
 PREVIEW_CHARS = 60
 HISTORY_LIMIT = 100  # transcrições carregadas do SQLite ao abrir
 OPENAI_MAX_BYTES = 25 * 1024 * 1024  # limite de upload da API de transcrição da OpenAI
+LONG_AUDIO_SECONDS = 30 * 60
+LONG_AUDIO_BYTES = 100 * 1024 * 1024
+STT_PROGRESS_INTERVAL_SEC = 1.0
 
 
 class VoxPromptApp(App):
@@ -51,6 +54,8 @@ class VoxPromptApp(App):
         self._active_entry: HistoryEntry | None = None
         self._error_msg = ""
         self._temp_files: set[str] = set()
+        self._stt_progress_stop: threading.Event | None = None
+        self._stt_progress_thread: threading.Thread | None = None
 
     # ---------- layout ----------
 
@@ -204,37 +209,155 @@ class VoxPromptApp(App):
 
     @work(thread=True, group="process")
     def _process_worker(self, path: str, duration: float, cleanup: bool = True) -> None:
+        try:
+            self._process_file_sync(path, duration)
+        finally:
+            self._stop_local_stt_progress()
+            if cleanup:
+                self._safe_remove(path)  # WAV gravado é temporário; arquivo solto não.
+
+    def _process_file_sync(self, path: str, duration: float) -> None:
         backend = self.stt_backend
         template = self.template
-        try:
-            try:
-                raw = transcribe.transcribe(path, backend, self.config)
-            except Exception as exc:  # noqa: BLE001
-                self.call_from_thread(self._on_error, f"STT: {exc}")
+        raw_entry_id: int | None = None
+
+        if backend == "local":
+            if not self._check_local_stt_available():
                 return
+            self._start_local_stt_progress()
 
-            self.call_from_thread(self._update_panel, "raw", raw)
+        try:
+            raw = transcribe.transcribe(path, backend, self.config)
+        except Exception as exc:  # noqa: BLE001
+            self.call_from_thread(self._on_error, f"STT: {exc}")
+            return
 
-            if template == "raw":
-                structured = raw
+        self._stop_local_stt_progress()
+        self.call_from_thread(self._update_panel, "raw", raw)
+
+        if template == "raw":
+            self.call_from_thread(
+                self._commit_entry, raw, raw, template, duration, backend
+            )
+            self.call_from_thread(self._set_state, "idle")
+            return
+
+        if self._is_long_audio(path, duration):
+            entry = self.call_from_thread(
+                self._commit_entry,
+                raw,
+                "",
+                template,
+                duration,
+                backend,
+                "raw_saved",
+            )
+            raw_entry_id = entry.id if entry is not None else None
+
+        self.call_from_thread(self._set_state, "structuring")
+        try:
+            structured = structure.structure(raw, template, self.config)
+        except Exception as exc:  # noqa: BLE001
+            if raw_entry_id is None:
+                self.call_from_thread(
+                    self._commit_entry,
+                    raw,
+                    "",
+                    template,
+                    duration,
+                    backend,
+                    "structure_failed",
+                )
             else:
-                self.call_from_thread(self._set_state, "structuring")
-                try:
-                    structured = structure.structure(raw, template, self.config)
-                except Exception as exc:  # noqa: BLE001
-                    self.call_from_thread(
-                        self._commit_entry, raw, "", template, duration, backend
-                    )
-                    self.call_from_thread(self._on_error, f"Claude: {exc}")
-                    return
+                self.call_from_thread(
+                    self._update_entry_structured,
+                    raw_entry_id,
+                    "",
+                    "structure_failed",
+                )
+            self.call_from_thread(self._on_error, f"Claude: {exc}")
+            return
 
+        if raw_entry_id is None:
             self.call_from_thread(
                 self._commit_entry, raw, structured, template, duration, backend
             )
-            self.call_from_thread(self._set_state, "idle")
-        finally:
-            if cleanup:
-                self._safe_remove(path)  # WAV gravado é temporário; arquivo solto não.
+        else:
+            self.call_from_thread(
+                self._update_entry_structured, raw_entry_id, structured, "complete"
+            )
+        self.call_from_thread(self._set_state, "idle")
+
+
+    # ---------- STT local: bloqueio e progresso ----------
+
+    def _check_local_stt_available(self) -> bool:
+        status = transcribe.fetch_local_status(self.config)
+        if status.error:
+            self.call_from_thread(
+                self._notify_warning,
+                "Não foi possível consultar /status do STT local; continuando.",
+            )
+            return True
+        if transcribe.local_status_is_processing(status.data):
+            self.call_from_thread(
+                self._on_error,
+                "STT local já está processando outro áudio; tente novamente ao terminar.",
+            )
+            return False
+        return True
+
+    def _start_local_stt_progress(self) -> None:
+        self._stop_local_stt_progress()
+        stop_event = threading.Event()
+        self._stt_progress_stop = stop_event
+        self._stt_progress_thread = threading.Thread(
+            target=self._poll_local_stt_progress,
+            args=(stop_event,),
+            name="voxprompt-local-stt-progress",
+            daemon=True,
+        )
+        self._stt_progress_thread.start()
+
+    def _stop_local_stt_progress(self) -> None:
+        stop_event = self._stt_progress_stop
+        if stop_event is not None:
+            stop_event.set()
+        thread = self._stt_progress_thread
+        if (
+            thread is not None
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=0.2)
+        self._stt_progress_thread = None
+        self._stt_progress_stop = None
+
+    def _poll_local_stt_progress(self, stop_event: threading.Event) -> None:
+        while not stop_event.is_set():
+            status = transcribe.fetch_local_status(self.config)
+            metrics = transcribe.fetch_local_metrics(self.config)
+            message = transcribe.format_local_progress(
+                status.data, metrics.data if metrics.error is None else None
+            )
+            if message and not stop_event.is_set():
+                self.call_from_thread(self._set_transcription_status, message)
+            stop_event.wait(STT_PROGRESS_INTERVAL_SEC)
+
+    def _set_transcription_status(self, message: str) -> None:
+        if self.is_mounted and self.state == "transcribing":
+            self.query_one("#status", StatusBar).set_status(message, "busy")
+
+    def _notify_warning(self, message: str) -> None:
+        self.notify(message, severity="warning")
+
+    def _is_long_audio(self, path: str, duration: float) -> bool:
+        if duration >= LONG_AUDIO_SECONDS:
+            return True
+        try:
+            return os.path.getsize(path) >= LONG_AUDIO_BYTES
+        except OSError:
+            return False
 
     # ---------- reestruturar última transcrição ----------
 
@@ -274,16 +397,34 @@ class VoxPromptApp(App):
         template: str,
         duration: float,
         backend: str,
-    ) -> None:
-        entry = self.history.add(backend, template, raw, structured, duration)
+        status: str = "complete",
+    ) -> HistoryEntry:
+        entry = self.history.add(backend, template, raw, structured, duration, status)
         self._active_entry = entry
-        self._update_panel("raw", raw)
-        self._update_panel("structured", structured)
-        self._add_history_row(entry)
+        if self.is_mounted:
+            self._update_panel("raw", raw)
+            self._update_panel("structured", structured)
+            self._add_history_row(entry)
+        return entry
+
+    def _update_entry_structured(
+        self, entry_id: int, structured: str, status: str = "complete"
+    ) -> HistoryEntry | None:
+        entry = self.history.update_structured(entry_id, structured, status)
+        if entry is None:
+            return None
+        self._active_entry = entry
+        if self.is_mounted:
+            self._update_panel("raw", entry.raw_text)
+            self._update_panel("structured", entry.structured_text)
+            self._replace_history_row(entry)
+        return entry
 
     def _add_history_row(self, entry: HistoryEntry) -> None:
         active = entry.structured_text or entry.raw_text
         preview = active.replace("\n", " ")[:PREVIEW_CHARS]
+        if entry.status != "complete":
+            preview = f"[{entry.status}] {preview}"[:PREVIEW_CHARS]
         self.query_one("#history", DataTable).add_row(
             str(entry.id),
             entry.timestamp.strftime("%H:%M:%S"),
@@ -293,6 +434,14 @@ class VoxPromptApp(App):
             str(len(active)),
             key=str(entry.id),
         )
+
+    def _replace_history_row(self, entry: HistoryEntry) -> None:
+        table = self.query_one("#history", DataTable)
+        try:
+            table.remove_row(str(entry.id))
+        except Exception:  # noqa: BLE001 - a linha pode não existir na UI atual.
+            pass
+        self._add_history_row(entry)
 
     def _update_panel(self, which: str, text: str) -> None:
         self.query_one(f"#{which}", TextArea).text = text
@@ -377,6 +526,7 @@ class VoxPromptApp(App):
     def _on_error(self, message: str) -> None:
         self._stop_timer()
         self._stop_event.set()
+        self._stop_local_stt_progress()
         self._error_msg = message
         self.state = "error"
         self.bell()
@@ -395,10 +545,12 @@ class VoxPromptApp(App):
     def action_quit(self) -> None:
         self._stop_event.set()
         self._stop_timer()
+        self._stop_local_stt_progress()
         self.exit()
 
     def on_unmount(self) -> None:
         self._stop_event.set()
+        self._stop_local_stt_progress()
         for path in list(self._temp_files):
             self._safe_remove(path)
         self.history.close()
