@@ -70,7 +70,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`reuniao`/`raw`) |
 | `VOXPROMPT_DB` | `./voxprompt.db` | caminho do SQLite com o histórico de transcrições |
 | `CLAUDE_BIN` | `claude` | binário do Claude Code |
-| `CLAUDE_MODEL` | `sonnet` | modelo do `claude -p` na estruturação (`sonnet`/`opus`/`haiku`). Vazio = herda o default do CLI |
+| `CLAUDE_MODEL` | `claude-sonnet-5` | modelo do `claude -p` na estruturação. Vazio = herda o default do CLI |
 | `VOXPROMPT_CLAUDE_TIMEOUT_SEC` | `300` | timeout, em segundos, para cada chamada `claude -p` |
 | `OPENAI_API_KEY` | — | **exigido só no backend `openai`** |
 

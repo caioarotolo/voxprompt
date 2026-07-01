@@ -16,7 +16,7 @@ def make_config(timeout: int = 300) -> Config:
         template="spec",
         db_path=":memory:",
         claude_bin="claude",
-        claude_model="sonnet",
+        claude_model="claude-sonnet-5",
         claude_timeout_sec=timeout,
         openai_api_key=None,
         anthropic_api_key_present=False,
@@ -32,12 +32,19 @@ class ClaudeTimeoutTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VOXPROMPT_CLAUDE_TIMEOUT_SEC": "nope"}):
             self.assertEqual(load_config().claude_timeout_sec, 300)
 
+    def test_default_claude_model_is_sonnet_5(self):
+        with mock.patch("voxprompt.config._load_dotenv"), mock.patch.dict(
+            os.environ, {}, clear=True
+        ):
+            self.assertEqual(load_config().claude_model, "claude-sonnet-5")
+
     def test_structure_passes_configured_timeout_to_claude(self):
         completed = subprocess.CompletedProcess(
             args=["claude"], returncode=0, stdout="ok", stderr=""
         )
         with mock.patch("subprocess.run", return_value=completed) as run:
             self.assertEqual(structure.structure("texto curto", "spec", make_config(7)), "ok")
+        self.assertEqual(run.call_args.args[0][:3], ["claude", "--model", "claude-sonnet-5"])
         self.assertEqual(run.call_args.kwargs["timeout"], 7)
 
 
