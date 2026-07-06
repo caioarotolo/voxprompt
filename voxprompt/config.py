@@ -4,7 +4,18 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STT_BACKENDS = ("local", "openai")
-TEMPLATES = ("spec", "commit", "prompt", "financeiro", "marketing", "formal", "whatsapp", "reuniao", "raw")
+TEMPLATES = (
+    "spec",
+    "commit",
+    "prompt",
+    "financeiro",
+    "marketing",
+    "formal",
+    "whatsapp",
+    "conversa",
+    "reuniao",
+    "raw",
+)
 
 
 def _load_dotenv() -> None:

@@ -1,6 +1,8 @@
 import os
 import threading
 import time
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from textual import events, work
@@ -23,6 +25,15 @@ OPENAI_MAX_BYTES = 25 * 1024 * 1024  # limite de upload da API de transcrição 
 LONG_AUDIO_SECONDS = 30 * 60
 LONG_AUDIO_BYTES = 100 * 1024 * 1024
 STT_PROGRESS_INTERVAL_SEC = 1.0
+
+
+@dataclass
+class BatchTranscriptSegment:
+    index: int
+    total: int
+    path: str
+    timestamp: datetime | None
+    text: str
 
 
 class VoxPromptApp(App):
@@ -175,20 +186,40 @@ class VoxPromptApp(App):
         Tratamos só quando o texto colado aponta para um arquivo existente; colagens de
         texto comum seguem o fluxo normal (os painéis são read-only e ignoram).
         """
-        path = dropfile.parse_dropped_path(event.text)
-        if path is None or not os.path.isfile(path):
+        paths = dropfile.parse_dropped_paths(event.text)
+        if not paths or not all(os.path.isfile(path) for path in paths):
             return
         event.stop()
-        self._transcribe_file(path)
+        if len(paths) == 1:
+            self._transcribe_file(paths[0])
+        else:
+            self._transcribe_files(paths)
 
     def _transcribe_file(self, path: str) -> None:
         if self.state in BUSY_STATES:
             self.notify("Aguarde o processamento atual.", severity="warning")
             return
+        if not self._validate_audio_path(path):
+            return
+        self.notify(f"Transcrevendo {os.path.basename(path)}…")
+        self._start_processing(path, 0.0, cleanup=False)
+
+    def _transcribe_files(self, paths: list[str]) -> None:
+        if self.state in BUSY_STATES:
+            self.notify("Aguarde o processamento atual.", severity="warning")
+            return
+        ordered_paths = dropfile.sort_for_conversation(paths)
+        for path in ordered_paths:
+            if not self._validate_audio_path(path):
+                return
+        self.notify(f"Transcrevendo {len(ordered_paths)} áudios em ordem…")
+        self._start_batch_processing(ordered_paths)
+
+    def _validate_audio_path(self, path: str) -> bool:
         if not dropfile.is_supported(path):
             ext = Path(path).suffix.lower() or "sem extensão"
             self._on_error(f"Formato de áudio não suportado: {ext}.")
-            return
+            return False
         if self.stt_backend == "openai":
             size = os.path.getsize(path)
             if size > OPENAI_MAX_BYTES:
@@ -197,15 +228,18 @@ class VoxPromptApp(App):
                     f"Arquivo de {mb:.1f} MB excede o limite de 25 MB da API OpenAI. "
                     "Use o STT local (tecla s) ou reduza o arquivo."
                 )
-                return
-        self.notify(f"Transcrevendo {os.path.basename(path)}…")
-        self._start_processing(path, 0.0, cleanup=False)
+                return False
+        return True
 
     # ---------- processamento (STT + estruturação) ----------
 
     def _start_processing(self, path: str, duration: float, cleanup: bool = True) -> None:
         self.state = "transcribing"
         self._process_worker(path, duration, cleanup)
+
+    def _start_batch_processing(self, paths: list[str]) -> None:
+        self.state = "transcribing"
+        self._process_batch_worker(paths)
 
     @work(thread=True, group="process")
     def _process_worker(self, path: str, duration: float, cleanup: bool = True) -> None:
@@ -215,6 +249,13 @@ class VoxPromptApp(App):
             self._stop_local_stt_progress()
             if cleanup:
                 self._safe_remove(path)  # WAV gravado é temporário; arquivo solto não.
+
+    @work(thread=True, group="process")
+    def _process_batch_worker(self, paths: list[str]) -> None:
+        try:
+            self._process_batch_files_sync(paths)
+        finally:
+            self._stop_local_stt_progress()
 
     def _process_file_sync(
         self, path: str, duration: float, checkpoint_raw: bool = False
@@ -290,6 +331,147 @@ class VoxPromptApp(App):
             )
         self.call_from_thread(self._set_state, "idle")
 
+    def _process_batch_files_sync(self, paths: list[str]) -> None:
+        paths = dropfile.sort_for_conversation(paths)
+        backend = self.stt_backend
+        template = self.template
+        segments: list[BatchTranscriptSegment] = []
+        raw_entry_id: int | None = None
+
+        if backend == "local" and not self._check_local_stt_available():
+            return
+
+        total = len(paths)
+        for index, path in enumerate(paths, start=1):
+            self.call_from_thread(
+                self._set_transcription_status,
+                f"Transcrevendo áudio {index}/{total}: {os.path.basename(path)}",
+            )
+            if backend == "local":
+                self._start_local_stt_progress()
+            try:
+                text = transcribe.transcribe(path, backend, self.config)
+            except Exception as exc:  # noqa: BLE001
+                partial_raw = self._format_batch_transcript(segments)
+                if partial_raw:
+                    self.call_from_thread(
+                        self._commit_entry,
+                        partial_raw,
+                        "",
+                        template,
+                        0.0,
+                        backend,
+                        "stt_failed",
+                    )
+                self.call_from_thread(
+                    self._on_error,
+                    f"STT no áudio {index}/{total} ({os.path.basename(path)}): {exc}",
+                )
+                return
+            finally:
+                if backend == "local":
+                    self._stop_local_stt_progress()
+
+            segments.append(
+                BatchTranscriptSegment(
+                    index=index,
+                    total=total,
+                    path=path,
+                    timestamp=dropfile.whatsapp_timestamp(path),
+                    text=text,
+                )
+            )
+            self.call_from_thread(
+                self._update_panel, "raw", self._format_batch_transcript(segments)
+            )
+
+        raw = self._format_batch_transcript(segments)
+
+        if template == "raw":
+            self.call_from_thread(self._commit_entry, raw, raw, template, 0.0, backend)
+            self.call_from_thread(self._set_state, "idle")
+            return
+
+        entry = self.call_from_thread(
+            self._commit_entry,
+            raw,
+            "",
+            template,
+            0.0,
+            backend,
+            "raw_saved",
+        )
+        raw_entry_id = entry.id if entry is not None else None
+
+        self.call_from_thread(self._set_state, "structuring")
+        try:
+            structured = structure.structure(raw, template, self.config)
+        except Exception as exc:  # noqa: BLE001
+            if raw_entry_id is None:
+                self.call_from_thread(
+                    self._commit_entry,
+                    raw,
+                    "",
+                    template,
+                    0.0,
+                    backend,
+                    "structure_failed",
+                )
+            else:
+                self.call_from_thread(
+                    self._update_entry_structured,
+                    raw_entry_id,
+                    "",
+                    "structure_failed",
+                )
+            self.call_from_thread(self._on_error, f"Claude: {exc}")
+            return
+
+        if raw_entry_id is None:
+            self.call_from_thread(
+                self._commit_entry, raw, structured, template, 0.0, backend
+            )
+        else:
+            self.call_from_thread(
+                self._update_entry_structured, raw_entry_id, structured, "complete"
+            )
+        self.call_from_thread(self._set_state, "idle")
+
+    def _format_batch_transcript(
+        self, segments: list[BatchTranscriptSegment]
+    ) -> str:
+        if not segments:
+            return ""
+
+        total = segments[0].total
+        lines = [
+            "# Conversa transcrita em ordem",
+            "",
+            (
+                "Observação: os arquivos do WhatsApp indicam horário, mas não trazem "
+                "o remetente. Cada áudio abaixo é mantido como uma fala separada; "
+                "ajuste o rótulo do falante para Eu/Cliente quando souber."
+            ),
+            "",
+        ]
+        for segment in segments:
+            timestamp = (
+                segment.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                if segment.timestamp is not None
+                else "horário não identificado"
+            )
+            basename = os.path.basename(segment.path)
+            lines.extend(
+                [
+                    f"## Áudio {segment.index:02d}/{total} - {timestamp}",
+                    f"Arquivo: {basename}",
+                    "Falante: não identificado pelo arquivo",
+                    "",
+                    segment.text.strip() or "[sem texto transcrito]",
+                    "",
+                ]
+            )
+        return "\n".join(lines).strip()
 
     # ---------- STT local: bloqueio e progresso ----------
 

@@ -56,6 +56,18 @@ TEMPLATE_INSTRUCTIONS = {
         "português: tom leve e direto, frases curtas e emojis com moderação quando couber. "
         "Mantenha a intenção da fala. Responda apenas com a mensagem, sem preâmbulo."
     ),
+    "conversa": (
+        "Você recebe via stdin uma conversa transcrita a partir de vários áudios curtos, "
+        "em ordem cronológica, com um bloco por arquivo. Produza uma saída em Markdown "
+        "com EXATAMENTE estas seções e nesta ordem: ## Transcrição em ordem, ## Resumo, "
+        "## Pendências. Em Transcrição em ordem, limpe vícios de linguagem e repetições "
+        "excessivas sem resumir nem cortar conteúdo; preserve a ordem dos áudios, horários "
+        "e rótulos de falante recebidos. Se o falante estiver como 'não identificado pelo "
+        "arquivo', mantenha essa informação e não invente Eu/Cliente. Em Resumo, liste os "
+        "principais pontos conversados. Em Pendências, liste ações, dúvidas e próximos "
+        "passos mencionados; escreva 'Nenhuma pendência identificada.' se não houver. "
+        "Responda apenas com as seções pedidas, sem preâmbulo."
+    ),
     "reuniao": (
         "Você recebe via stdin a transcrição bruta de uma reunião em português. Produza a "
         "saída em Markdown com EXATAMENTE estas duas partes, nesta ordem.\n\n"

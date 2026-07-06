@@ -67,7 +67,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 | `OPENAI_STT_MODEL` | `gpt-4o-transcribe` | modelo STT no backend `openai` |
 | `LOCAL_STT_URL` | `http://localhost:8000/v1` | base URL do servidor local OpenAI-compatible |
 | `LOCAL_STT_MODEL` | `parakeet-tdt-0.6b-v3` | modelo STT local |
-| `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`reuniao`/`raw`) |
+| `VOXPROMPT_TEMPLATE` | `spec` | template inicial (`spec`/`commit`/`prompt`/`financeiro`/`marketing`/`formal`/`whatsapp`/`conversa`/`reuniao`/`raw`) |
 | `VOXPROMPT_DB` | `./voxprompt.db` | caminho do SQLite com o histórico de transcrições |
 | `CLAUDE_BIN` | `claude` | binário do Claude Code |
 | `CLAUDE_MODEL` | `claude-sonnet-5` | modelo do `claude -p` na estruturação. Vazio = herda o default do CLI |
@@ -86,7 +86,7 @@ Em zsh, troque `~/.bashrc` por `~/.zshrc`.
 |---|---|
 | `r` | inicia/para gravação (`● Gravando mm:ss`) |
 | `s` | alterna STT `local` ↔ `openai` |
-| `t` | cicla template `spec → commit → prompt → financeiro → marketing → formal → whatsapp → reuniao → raw` |
+| `t` | cicla template `spec → commit → prompt → financeiro → marketing → formal → whatsapp → conversa → reuniao → raw` |
 | `c` | copia o resultado ativo para o clipboard |
 | `l` | reestrutura a última transcrição com o template atual (sem regravar) |
 | `h` | mostra/oculta o histórico |
@@ -105,12 +105,26 @@ da janela do terminal**. O terminal cola o caminho do arquivo e a TUI o transcre
 STT atual, preenchendo a transcrição crua — daí em diante o fluxo é igual ao da gravação:
 troque o template com `t`, reestruture com `l`, copie com `c`.
 
+Também é possível colar vários caminhos de uma vez, por exemplo uma sequência de áudios
+baixados do WhatsApp:
+
+```bash
+'/home/me/WhatsApp Ptt 2026-07-06 at 17.44.40.ogg' '/home/me/WhatsApp Ptt 2026-07-06 at 16.47.08.ogg'
+```
+
+Quando todos os arquivos seguem o padrão `WhatsApp Ptt YYYY-MM-DD at HH.MM.SS`, o lote é
+ordenado cronologicamente antes da transcrição e salvo como uma única conversa no histórico.
+Use o template `conversa` para obter a versão limpa em formato de diálogo/resumo.
+
 - **Formatos aceitos:** `.mp3`, `.mp4`, `.m4a`, `.wav`, `.ogg`, `.oga`, `.opus`, `.webm`,
   `.flac`, `.mpeg`, `.mpga`, `.aac`. Formato não reconhecido → erro imediato, sem upload.
 - **Limite de tamanho:** no backend `openai` a API recusa arquivos acima de **25 MB** — a TUI
   bloqueia antes de enviar e sugere usar o STT local (`s`). O backend `local` não tem esse
   limite no cliente (depende do seu servidor Parakeet).
 - O **arquivo original não é alterado nem apagado** (só o WAV gravado pelo microfone é temporário).
+- Os nomes padrão baixados do WhatsApp não incluem o remetente. O VoxPrompt preserva cada
+  áudio como uma fala separada e marca o falante como não identificado; ajuste os rótulos
+  para `Eu`/`Cliente` depois quando o arquivo não trouxer essa informação.
 
 > O drag-and-drop depende do terminal colar o caminho do arquivo ao soltá-lo (suportado por
 > GNOME Terminal, Konsole, kitty, iTerm2, entre outros). Se o seu terminal não fizer isso,
@@ -125,6 +139,7 @@ troque o template com `t`, reestruture com `l`, copie com `c`.
 - **`marketing`** — reescrita com linguagem de marketing persuasiva.
 - **`formal`** — mensagem formal (e-mail profissional).
 - **`whatsapp`** — mensagem informal de WhatsApp.
+- **`conversa`** — conversa montada a partir de vários áudios em ordem, preservando cada fala, horários e pendências.
 - **`reuniao`** — transcrição de reunião em duas partes: _Transcrição limpa_ (conteúdo fiel e completo, sem vícios de linguagem nem resumo) e _Consolidado da reunião_ (decisões tomadas, próximos passos, pontos em aberto).
 - **`raw`** — transcrição sem reescrita (não chama o Claude).
 
