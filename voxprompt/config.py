@@ -6,10 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STT_BACKENDS = ("local", "openai")
 TEMPLATES = (
     "spec",
-    "commit",
     "prompt",
-    "financeiro",
-    "marketing",
     "formal",
     "whatsapp",
     "conversa",

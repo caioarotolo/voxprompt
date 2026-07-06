@@ -16,32 +16,11 @@ TEMPLATE_INSTRUCTIONS = {
         "Seja conciso e fiel à fala; não invente requisitos. Liste em Dúvidas qualquer "
         "ambiguidade. Responda apenas com a especificação, sem preâmbulo."
     ),
-    "commit": (
-        "Você recebe via stdin uma transcrição de fala descrevendo uma mudança de código. "
-        "Produza uma mensagem de commit em português no padrão Conventional Commits. "
-        "Primeira linha: título imperativo curto (até 72 caracteres). Linha em branco. "
-        "Depois um corpo explicando o quê e o porquê em tópicos. "
-        "Responda apenas com a mensagem de commit, sem preâmbulo."
-    ),
     "prompt": (
         "Você recebe via stdin uma transcrição de fala descrevendo uma tarefa de "
         "programação. Reescreva-a como um prompt direto e acionável para um agente de "
         "código, em português: deixe claros objetivo, restrições, arquivos/contexto "
         "relevantes e resultado esperado. Responda apenas com o prompt, sem preâmbulo."
-    ),
-    "financeiro": (
-        "Você recebe via stdin uma transcrição de fala (possivelmente informal) descrevendo "
-        "uma ideia, análise ou pedido. Reescreva-a em português com linguagem financeira "
-        "profissional, empregando a terminologia correta do mercado (fluxo de caixa, margem, "
-        "ROI, valuation, etc.) quando couber. Seja fiel ao conteúdo: não invente números, "
-        "dados ou conclusões. Responda apenas com o texto reescrito, sem preâmbulo."
-    ),
-    "marketing": (
-        "Você recebe via stdin uma transcrição de fala (possivelmente informal) descrevendo "
-        "um produto, oferta ou ideia. Reescreva-a em português com linguagem de marketing "
-        "clara e persuasiva, destacando benefícios e incluindo uma chamada para ação quando "
-        "fizer sentido. Não exagere nem invente fatos. Responda apenas com o texto reescrito, "
-        "sem preâmbulo."
     ),
     "formal": (
         "Você recebe via stdin uma transcrição de fala (possivelmente informal) com o "
